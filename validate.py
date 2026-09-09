@@ -6,6 +6,8 @@ refresh.py runs this automatically and aborts the rebuild on any FAIL.
 
 Hard checks (FAIL, blocks the build)
   A. Cardmarket product name equals the ledger card name (catches wrong product).
+  A2. The attacks/abilities in the Cardmarket product name match the set list entry
+     (catches a same-name different card, e.g. four Eevee promos).
   B. The card's set code + number resolve, in the GitHub set list, to that same name
      (catches a wrong set code like sm5 vs sm2, which is how Wailord became Alolan Vulpix).
   C. All cards of one set code share one Cardmarket expansion id.
@@ -35,6 +37,13 @@ def base(n):
 
 def norm_number(s):
     return re.sub(r'^0+', '', str(s).upper().replace('_A', ''))
+
+
+def cm_attacks(cmname):
+    """Attack names Cardmarket puts in brackets: 'Eevee [Call for Family | Gnaw]' -> {'callforfamily', 'gnaw'}.
+    Empty set when there is no bracket (trainers, energies, some promos)."""
+    m = re.search(r'\[(.*?)\]', cmname or '')
+    return {base(a) for a in m.group(1).split('|')} if m else set()
 
 
 def validate(binder, cards, setnames, products=None):
@@ -73,6 +82,13 @@ def validate(binder, cards, setnames, products=None):
                 fail(c, f"number {row['number']} not found in set list for code {row['setid']}")
             elif base(hits[0][0]) != base(c['name']):
                 fail(c, f"set code {row['setid']} number {row['number']} is '{hits[0][0]}' in the set list, not this card: wrong set code?")
+            else:
+                # A2. Cardmarket writes attacks and abilities in the product name, "Eevee [Call for Family | Gnaw]".
+                # The set list knows the card's attacks and abilities. They must agree, else it is a same-name different card.
+                cm_att = cm_attacks(cmname)
+                gh_att = {base(x) for x in (hits[0][3] if len(hits[0]) > 3 else [])}
+                if cm_att and gh_att and not cm_att <= gh_att:
+                    fail(c, f"attacks/abilities on Cardmarket product {sorted(cm_att)} do not match the set list {sorted(gh_att)}: same name, different card")
             exp_by_set[row['setid']].add(c.get('cm_exp'))
         else:
             fail(c, 'not present in cards.csv')

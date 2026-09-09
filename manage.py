@@ -51,7 +51,8 @@ def ensure_setlist(setid, setnames):
     if setid not in setnames:
         print(f"fetching set list {setid} from GitHub ...")
         d = fetch_json(GH.format(setid))
-        setnames[setid] = [(c['name'], c['number'], c.get('rarity', '')) for c in d]
+        setnames[setid] = [(c['name'], c['number'], c.get('rarity', ''),
+                            [x['name'] for x in c.get('attacks', [])] + [x['name'] for x in c.get('abilities', [])]) for c in d]
         save('set_names.json', setnames)
     return setnames[setid]
 
@@ -65,11 +66,14 @@ def products():
 
 def label_expansion(setid, setlist, prods, forced=None):
     exps = load('cm_expansions.json', {'labels': {}, 'why': {}})
+    # cm_expansion_labels.json (expansion id -> set code) covers every English set, made once by fingerprinting
+    for e_str, sid_ in (load('cm_expansion_labels.json', {}) or {}).items():
+        exps['labels'].setdefault(sid_, int(e_str))
     if forced:
         exps['labels'][setid] = forced; exps['why'][setid] = 'passed with --cm-exp'; save('cm_expansions.json', exps, 1); return forced
     if setid in exps['labels']:
         return exps['labels'][setid]
-    gh = {norm(n) for n, _, _ in setlist}
+    gh = {norm(x[0]) for x in setlist}
     byexp = collections.defaultdict(set)
     for p in prods: byexp[p['idExpansion']].add(norm(cmbase(p['name'])))
     rec = sorted(((len(gh & en) / len(gh), e, len(en)) for e, en in byexp.items()), reverse=True)[:4]
@@ -89,7 +93,8 @@ def cmd_add(a):
     setlist = ensure_setlist(a.setid, setnames)
     hit = [x for x in setlist if norm_number(x[1]) == norm_number(a.number)]
     if not hit: sys.exit(f"number {a.number} not in set {a.setid}")
-    ghname, _, rarity = hit[0]
+    ghname, _, rarity = hit[0][0], hit[0][1], hit[0][2]
+    gh_attacks = {norm(x) for x in (hit[0][3] if len(hit[0]) > 3 else [])}
     if norm(ghname) != norm(a.name):
         sys.exit(f"set {a.setid} number {a.number} is '{ghname}', not '{a.name}'. Wrong set code or number.")
     prods = products(); guide = {g['idProduct']: g for g in load(PRICES)['priceGuides']}
@@ -97,6 +102,15 @@ def cmd_add(a):
     cands = [p for p in prods if p['idExpansion'] == exp and norm(cmbase(p['name'])) == norm(ghname)]
     search = f"https://www.cardmarket.com/en/Pokemon/Products/Search?idExpansion={exp}&searchString={urllib.parse.quote_plus(ghname)}"
     if not cands: sys.exit(f"no product named '{ghname}' in expansion {exp}. Search: {search}")
+    # Same name, different card: Cardmarket's "[Ability | Attack]" bracket must agree with the set list's attacks and abilities.
+    def cm_attacks(name):
+        m = re.search(r'\[(.*?)\]', name); return {norm(x) for x in m.group(1).split('|')} if m else set()
+    if gh_attacks:
+        same = [p for p in cands if not cm_attacks(p['name']) or cm_attacks(p['name']) <= gh_attacks]
+        dropped = len(cands) - len(same)
+        if dropped: print(f"{dropped} same-name product(s) dropped: their attacks/abilities differ from {sorted(gh_attacks)}")
+        cands = same
+        if not cands: sys.exit(f"no product in expansion {exp} named '{ghname}' with attacks/abilities {sorted(gh_attacks)}. The set list may be behind for a new card; check {search} and pass --cm-id.")
     if a.cm_id:
         pick = next((p for p in cands if p['idProduct'] == a.cm_id), None)
         if not pick: sys.exit(f"--cm-id {a.cm_id} is not one of the candidates")

@@ -28,7 +28,8 @@
   "sv4": 5444,
   "sv8": 5879,
   "sv6": 5691,
-  "sm2": 1800
+  "sm2": 1800,
+  "svp": 5241
  },
  "why": {
   "swshp": "only expansion containing 98% of the set's card names",
@@ -59,7 +60,8 @@
   "sv4": "only expansion containing 100% of the set's card names",
   "sv8": "only expansion containing 100% of the set's card names",
   "sv6": "only expansion containing 100% of the set's card names",
-  "sm2": "Guardians Rising; set code corrected from sm5 (Ultra Prism) on 2026-09-09 after Raymond spotted Wailord GRI30 showing Alolan Vulpix prices"
+  "sm2": "Guardians Rising; set code corrected from sm5 (Ultra Prism) on 2026-09-09 after Raymond spotted Wailord GRI30 showing Alolan Vulpix prices",
+  "svp": "only expansion containing 100% of the set's card names"
  },
  "price_guide_createdAt": "2026-09-09T02:45:45+0200"
 }

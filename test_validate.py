@@ -15,6 +15,8 @@ SETNAMES = {
     'cel25': [['Pikachu', '5', 'Rare Holo']],
     'cel25c':[['Dark Gyarados', '8', 'Classic Collection']],
     'sv1':   [['Gardevoir ex', '86', 'Double Rare'], ['Gardevoir ex', '228', 'Ultra Rare']],
+    # 4-element entries carry the card's attacks and abilities (set_names.json format since 2026-09-09)
+    'svp':   [['Eevee', '43', 'Promo', ['Call for Family', 'Tackle']]],
 }
 
 
@@ -69,6 +71,36 @@ class RegressionSudowoodoShinyVault(unittest.TestCase):
              card(16, 'Sudowoodo (shiny)', 'Hidden Fates Shiny Vault', 'SV20', 396772, 2514, 'Sudowoodo [Roadblock | Rock Throw]')]
         cards = {**row(22, 'sm115', '14'), **row(16, 'sma', 'SV20')}
         fails, _ = validate(b, cards, SETNAMES)
+        self.assertEqual(fails, [])
+
+
+class RegressionEeveePromos(unittest.TestCase):
+    """Real slip: four Cardmarket promos are all called 'Eevee'. The set list knew promo 43
+    (Call for Family / Tackle); the product matched was 'Eevee [Call for Family | Gnaw]', a
+    different 2025 promo. Name and number checks pass; only the attacks tell them apart."""
+
+    def test_same_name_different_attacks_fails(self):
+        b = [card(1, 'Eevee', 'SV Promos', '43', 826138, 5241, 'Eevee [Call for Family | Gnaw]')]
+        fails, _ = validate(b, row(1, 'svp', '43'), SETNAMES)
+        self.assertTrue(any('attacks/abilities on Cardmarket product' in f for f in fails), fails)
+
+    def test_matching_attacks_pass(self):
+        b = [card(1, 'Eevee', 'SV Promos', '43', 715757, 5241, 'Eevee [Call for Family | Tackle]')]
+        fails, _ = validate(b, row(1, 'svp', '43'), SETNAMES)
+        self.assertEqual(fails, [])
+
+    def test_subset_of_attacks_passes(self):
+        # Cardmarket sometimes lists fewer attacks than the card has
+        b = [card(1, 'Eevee', 'SV Promos', '43', 715757, 5241, 'Eevee [Tackle]')]
+        fails, _ = validate(b, row(1, 'svp', '43'), SETNAMES)
+        self.assertEqual(fails, [])
+
+    def test_no_bracket_or_no_attacks_is_not_checked(self):
+        b = [card(1, 'Eevee', 'SV Promos', '43', 715757, 5241, 'Eevee')]
+        fails, _ = validate(b, row(1, 'svp', '43'), SETNAMES)
+        self.assertEqual(fails, [])
+        b = [card(1, 'Pikachu', 'Celebrations', '5', 100, 4347, 'Pikachu [Thunderbolt]')]   # cel25 entry has no attacks
+        fails, _ = validate(b, row(1, 'cel25', '5'), SETNAMES)
         self.assertEqual(fails, [])
 
 

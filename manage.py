@@ -98,8 +98,17 @@ def cmd_add(a):
     if norm(ghname) != norm(a.name):
         sys.exit(f"set {a.setid} number {a.number} is '{ghname}', not '{a.name}'. Wrong set code or number.")
     prods = products(); guide = {g['idProduct']: g for g in load(PRICES)['priceGuides']}
+    # Fast path: products_map.json (built by build_product_map.py) already ties product ids to set + number.
+    pm = load('products_map.json', {})
+    hits_pm = [int(pid) for pid, m in pm.items() if m['setid'] == a.setid and norm_number(m['number']) == norm_number(a.number)]
+    if len(hits_pm) == 1 and not a.cm_id:
+        m = pm[str(hits_pm[0])]
+        print(f"product map: {a.setid} {a.number} -> Cardmarket product {hits_pm[0]} ({m['conf']} confidence, {m.get('method','')})")
+        a.cm_id = hits_pm[0]
     exp = label_expansion(a.setid, setlist, prods, a.cm_exp)
     cands = [p for p in prods if p['idExpansion'] == exp and norm(cmbase(p['name'])) == norm(ghname)]
+    if a.cm_id and not any(p['idProduct'] == a.cm_id for p in cands):
+        cands += [p for p in prods if p['idProduct'] == a.cm_id]
     search = f"https://www.cardmarket.com/en/Pokemon/Products/Search?idExpansion={exp}&searchString={urllib.parse.quote_plus(ghname)}"
     if not cands: sys.exit(f"no product named '{ghname}' in expansion {exp}. Search: {search}")
     # Same name, different card: Cardmarket's "[Ability | Attack]" bracket must agree with the set list's attacks and abilities.

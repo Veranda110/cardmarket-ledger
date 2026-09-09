@@ -17,6 +17,9 @@ Hard checks (FAIL, blocks the build)
   E. No two rows share a cm_id: multiple copies of one card are one row with qty > 1.
   E2. qty is a whole number of at least 1.
   F. Card count equals cards.csv.
+  I. If products_map.json exists (built by build_product_map.py), the card's product id must map to
+     its own set code + number. This is the strongest check: the map was built independently from
+     names, attacks and a price fingerprint per card number.
 Soft checks (WARN, reported but not blocking)
   G. Trend moved more than 3x up or down against a snapshot at most 45 days earlier.
   H. Card is tagged verify (a sibling product within 2x exists) and has not been confirmed.
@@ -46,15 +49,18 @@ def cm_attacks(cmname):
     return {base(a) for a in m.group(1).split('|')} if m else set()
 
 
-def validate(binder, cards, setnames, products=None):
+def validate(binder, cards, setnames, products=None, product_map=None):
     """Pure function. Returns (fails, warns) as lists of strings.
 
-    binder:   list of card dicts (binder.json)
-    cards:    {n(str): {'setid','number',...}} (cards.csv rows)
-    setnames: {setid: [[name, number, rarity], ...]} (set_names.json)
-    products: optional {idProduct: {'name': ...}} to fill a missing cm_name
+    binder:      list of card dicts (binder.json)
+    cards:       {n(str): {'setid','number',...}} (cards.csv rows)
+    setnames:    {setid: [[name, number, rarity], ...]} (set_names.json)
+    products:    optional {idProduct: {'name': ...}} to fill a missing cm_name
+    product_map: optional {str(idProduct): {'setid','number','conf',...}} (products_map.json);
+                 when given, check I requires the card's cm_id to map to its set code + number
     """
     products = products or {}
+    product_map = product_map or {}
     fails, warns = [], []
 
     def fail(c, msg): fails.append(f"#{c['n']:>2} {c['name']}: {msg}")
@@ -90,6 +96,12 @@ def validate(binder, cards, setnames, products=None):
                 if cm_att and gh_att and not cm_att <= gh_att:
                     fail(c, f"attacks/abilities on Cardmarket product {sorted(cm_att)} do not match the set list {sorted(gh_att)}: same name, different card")
             exp_by_set[row['setid']].add(c.get('cm_exp'))
+            # I. product map agreement: the stored product id must be the one the map assigns to this set + number
+            pm = product_map.get(str(c.get('cm_id')))
+            if product_map and pm is None:
+                warn(c, 'product id not in products_map.json (unlabelled expansion or unmatched product)')
+            elif pm and (pm['setid'] != row['setid'] or norm_number(pm['number']) != norm_number(row['number'])):
+                fail(c, f"products_map.json says product {c.get('cm_id')} is {pm['setid']} {pm['number']} ({pm['conf']}), not {row['setid']} {row['number']}")
         else:
             fail(c, 'not present in cards.csv')
         # D. price today
@@ -139,7 +151,8 @@ def main():
     prods_path = 'products_singles_6.json'
     if os.path.exists(prods_path):
         products = {p['idProduct']: p for p in json.load(open(prods_path, encoding='utf-8'))['products']}
-    fails, warns = validate(binder, cards, setnames, products)
+    product_map = json.load(open('products_map.json', encoding='utf-8')) if os.path.exists('products_map.json') else None
+    fails, warns = validate(binder, cards, setnames, products, product_map)
     print(f"validate: {len(binder)} cards, {len(fails)} FAIL, {len(warns)} WARN")
     for f in fails: print('  FAIL', f)
     for w in warns: print('  WARN', w)

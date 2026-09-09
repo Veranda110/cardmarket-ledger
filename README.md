@@ -40,6 +40,7 @@ Open http://localhost:8080. Every container start also refreshes, so a machine t
 | `validate.py` | hard checks on the collection; a FAIL rolls back and blocks the build (`test_validate.py` covers it) |
 | `build_page.py` | renders `data/binder_ledger.html` from `data/binder.json` |
 | `manage.py` | add, remove, set quantity or finish, mark verified. The only way to change the card set |
+| `build_product_map.py` | one-time (and per new set): maps every English Cardmarket product id to set code, number, name, rarity, with a confidence grade. Output `data/products_map.json` |
 | `Dockerfile`, `start.sh` | the refresh container: Python + cron |
 | `compose.yml`, `nginx.conf` | both containers and the web server config |
 
@@ -51,6 +52,7 @@ Everything with state lives in `data/`:
 | `set_names.json` | card lists per set from [pokemon-tcg-data](https://github.com/PokemonTCG/pokemon-tcg-data), fetched once per set |
 | `cm_expansions.json` | which Cardmarket expansion id is which set, and why |
 | `cm_match.json` | per-card matching record |
+| `products_map.json` | **the product map**: ~22,000 Cardmarket product ids -> set, number, name, rarity, confidence. Built once, versioned, what makes the price history card-level data |
 | `price_guide_6.json`, `products_singles_6.json` | today's downloads, overwritten daily |
 | `history/` | the archive, one export per day |
 | `binder_ledger.html` | the built page |
@@ -71,6 +73,20 @@ Set codes are pokemontcg.io's (`cel25`, `swsh12pt5`, `sv3`), see the
 `add` checks that the number really is that card, finds the Cardmarket expansion, lists the
 matching products with today's price and stops if more than one matches until you pass
 `--cm-id`. Then run `refresh.py` or wait for the nightly run.
+
+## The product map
+
+Cardmarket identifies a card only by product id, a name like `Eevee [Call for Family | Gnaw]` and an
+expansion id. `build_product_map.py` labels every English expansion id with its set (by overlapping
+product names with the set's card list), then inside each expansion matches products to card numbers
+by name, by attacks and abilities, and, where several versions share both, by a price fingerprint:
+pokemontcg.io publishes Cardmarket prices per card number, and the product whose price history
+contains that (trend, 30-day) pair is the card. Confidence per row: `high` (unique or fingerprint
+with a clear runner-up), `medium` (fingerprint close call or price-rank fallback), `low` (guess).
+Code cards are skipped. Japanese expansions are not mapped yet.
+
+The validator uses the map as its strongest check: a card's stored product id must map to its own
+set code and number.
 
 ## How a card is tied to a Cardmarket product
 

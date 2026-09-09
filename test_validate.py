@@ -104,6 +104,32 @@ class RegressionEeveePromos(unittest.TestCase):
         self.assertEqual(fails, [])
 
 
+class ProductMapCheck(unittest.TestCase):
+    PM = {'297492': {'setid': 'sm2', 'number': '30', 'conf': 'high'},
+          '315961': {'setid': 'sm5', 'number': '30', 'conf': 'high'}}
+
+    def test_agreeing_map_passes(self):
+        b = [card(31, 'Wailord (Dive)', 'Guardians Rising', '30', 297492, 1800, 'Wailord [Dive | Open Sea]')]
+        fails, warns = validate(b, row(31, 'sm2', '30'), SETNAMES, product_map=self.PM)
+        self.assertEqual(fails, []); self.assertEqual(warns, [])
+
+    def test_disagreeing_map_fails(self):
+        # ledger claims sm2 30 but the stored product is mapped to sm5 30 (the Wailord/Alolan Vulpix bug seen from the map side)
+        b = [card(31, 'Wailord (Dive)', 'Guardians Rising', '30', 315961, 1800, 'Wailord [Dive | Open Sea]')]
+        fails, _ = validate(b, row(31, 'sm2', '30'), SETNAMES, product_map=self.PM)
+        self.assertTrue(any('products_map.json says product 315961 is sm5 30' in f for f in fails), fails)
+
+    def test_product_missing_from_map_only_warns(self):
+        b = [card(31, 'Wailord (Dive)', 'Guardians Rising', '30', 999999, 1800, 'Wailord [Dive | Open Sea]')]
+        fails, warns = validate(b, row(31, 'sm2', '30'), SETNAMES, product_map=self.PM)
+        self.assertEqual(fails, []); self.assertTrue(any('not in products_map' in w for w in warns), warns)
+
+    def test_no_map_given_skips_check(self):
+        b = [card(31, 'Wailord (Dive)', 'Guardians Rising', '30', 315961, 1800, 'Wailord [Dive | Open Sea]')]
+        fails, warns = validate(b, row(31, 'sm2', '30'), SETNAMES)
+        self.assertEqual(warns, [])
+
+
 class OtherHardChecks(unittest.TestCase):
     def test_two_expansions_for_one_set_code_fails(self):
         b = [card(1, 'Pikachu', 'Celebrations', '5', 100, 4347), card(2, 'Pikachu', 'Celebrations', '5', 101, 4345)]

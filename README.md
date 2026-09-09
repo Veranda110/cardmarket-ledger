@@ -1,0 +1,110 @@
+# cardmarket-ledger
+
+A price ledger for a Pokémon card collection, fed by Cardmarket's own nightly price export.
+Two containers: one downloads the export every day, validates the collection and rebuilds a
+static page; the other serves that page and the growing archive of daily exports.
+
+No third-party price mirrors, no scraping, no API keys. Cardmarket publishes the file for free;
+this just keeps it.
+
+## What you get
+
+- `binder_ledger.html`: your cards, today's Cardmarket trend and 7-day average, a history
+  column, sortable, dark mode. Served at http://localhost:8080.
+- `data/history/price_guide_6_YYYYMMDD.json`: one copy of Cardmarket's export per day.
+  Every product on Cardmarket Pokémon, about 17 MB a day. Nobody else keeps these publicly.
+- A validator that refuses to build if a card is matched to the wrong product.
+
+## Run it
+
+Requires Docker. Python 3.13 only if you want to run the scripts outside Docker.
+
+```
+git clone https://github.com/<you>/cardmarket-ledger
+cd cardmarket-ledger
+mkdir data
+cp example/binder.json example/cards.csv data/
+docker compose up -d --build
+docker compose logs -f refresh
+```
+
+The first start does a refresh immediately, then cron runs one at 06:00 every day.
+Open http://localhost:8080. Every container start also refreshes, so a machine that is off at
+06:00 catches up when it boots.
+
+## Files
+
+| File | Role |
+|---|---|
+| `refresh.py` | daily job: download export, save to history, ask Wayback to archive it, update prices, validate, build page |
+| `validate.py` | hard checks on the collection; a FAIL rolls back and blocks the build (`test_validate.py` covers it) |
+| `build_page.py` | renders `data/binder_ledger.html` from `data/binder.json` |
+| `manage.py` | add, remove, set quantity or finish, mark verified. The only way to change the card set |
+| `Dockerfile`, `start.sh` | the refresh container: Python + cron |
+| `compose.yml`, `nginx.conf` | both containers and the web server config |
+
+Everything with state lives in `data/`:
+
+| File | Kind |
+|---|---|
+| `binder.json`, `cards.csv` | your collection with Cardmarket product ids. Private, not in git. Start from `example/` |
+| `set_names.json` | card lists per set from [pokemon-tcg-data](https://github.com/PokemonTCG/pokemon-tcg-data), fetched once per set |
+| `cm_expansions.json` | which Cardmarket expansion id is which set, and why |
+| `cm_match.json` | per-card matching record |
+| `price_guide_6.json`, `products_singles_6.json` | today's downloads, overwritten daily |
+| `history/` | the archive, one export per day |
+| `binder_ledger.html` | the built page |
+
+`LEDGER_DATA` overrides the data folder (default `./data`).
+
+## Adding a card
+
+```
+py -3.13 manage.py add "Mew" cel25 11 --page "Pikachu" --set-name Celebrations
+py -3.13 manage.py qty 19 2
+py -3.13 manage.py finish 12 reverse
+py -3.13 manage.py remove 57
+```
+
+Set codes are pokemontcg.io's (`cel25`, `swsh12pt5`, `sv3`), see the
+[card list folder](https://github.com/PokemonTCG/pokemon-tcg-data/tree/master/cards/en).
+`add` checks that the number really is that card, finds the Cardmarket expansion, lists the
+matching products with today's price and stops if more than one matches until you pass
+`--cm-id`. Then run `refresh.py` or wait for the nightly run.
+
+## How a card is tied to a Cardmarket product
+
+Cardmarket's export has product ids, names and expansion ids, no set names or card numbers,
+and the same name recurs across sets and versions. So each card is matched once:
+
+1. The set's card list from pokemon-tcg-data gives the name at that number.
+2. Cardmarket expansion ids are labelled by overlapping their product names with that list.
+   An English set and its Japanese twin both match; the one whose prices agree with an
+   independent reading wins. Stored in `cm_expansions.json`.
+3. Inside the expansion, the product with that name. Several versions (regular, full art,
+   illustration rare) are told apart by price tier; look-alikes get a `verify` tag until checked.
+
+Refreshing never repeats this, it looks up the stored id in the day's export.
+
+## Data sources
+
+- Cardmarket price export: <https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_6.json>
+  (offered on [cardmarket.com › Data › Price Guide](https://www.cardmarket.com/en/Pokemon/Data/Price-Guide))
+- Cardmarket product list: <https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_6.json>
+- Card lists per set: <https://github.com/PokemonTCG/pokemon-tcg-data>
+- Older exports: the [Wayback Machine](https://web.archive.org/web/*/downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_6.json)
+
+Prices are Cardmarket's "Price Trend" and averages for the product as a whole (all languages
+and conditions listed under it). Reverse holo rows use the export's reverse-holo fields.
+
+## Tests
+
+```
+py -3.13 -m unittest test_validate -v
+```
+
+Also run during every image build; a failing test means no image.
+
+## License
+
+MIT.

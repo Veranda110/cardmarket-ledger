@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# All state lives in data/. Only two generic files from it are versioned (see the ! lines):
+#   set_names.json      cached card lists from pokemon-tcg-data (GitHub)
+#   cm_expansions.json  which Cardmarket expansion id is which set, and why
+# Everything else is either the owner's private collection (binder.json, cards.csv, cm_match.json),
+# a nightly download (price_guide_6.json, products_singles_6.json, history/), or generated
+# (binder_ledger.html, *.last_good.*).
+data/*
+!data/set_names.json
+!data/cm_expansions.json
+
+# Editor and OS noise
+.vscode/
+Thumbs.db
+.DS_Store

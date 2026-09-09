@@ -1,0 +1,17 @@
+[
+{"n": 1, "name": "Wailord", "set": "Guardians Rising", "num": "30", "num_src": "30", "setid": "sm2", "page": "Water", "lang": "EN", "finish": "normal", "qty": 1,
+ "cm_id": 297492, "cm_exp": 1800, "cm_name": "Wailord [Dive | Open Sea]",
+ "trend": null, "avg30": null, "avg7": null, "avg1": null, "low": null, "cmd": null, "hist": {}, "verify": false, "verified": true,
+ "cm": "https://www.cardmarket.com/en/Pokemon/Products/Search?idExpansion=1800&searchString=Wailord",
+ "cm_search": "https://www.cardmarket.com/en/Pokemon/Products/Search?idExpansion=1800&searchString=Wailord"},
+{"n": 2, "name": "Zekrom TG", "set": "Brilliant Stars Trainer Gallery", "num": "TG05", "num_src": "TG05", "setid": "swsh9tg", "page": "Trainer Gallery", "lang": "EN", "finish": "normal", "qty": 1,
+ "cm_id": 608737, "cm_exp": 4434, "cm_name": "Zekrom [Slash | Wild Shock]",
+ "trend": null, "avg30": null, "avg7": null, "avg1": null, "low": null, "cmd": null, "hist": {}, "verify": false, "verified": true,
+ "cm": "https://www.cardmarket.com/en/Pokemon/Products/Search?idExpansion=4434&searchString=Zekrom",
+ "cm_search": "https://www.cardmarket.com/en/Pokemon/Products/Search?idExpansion=4434&searchString=Zekrom"},
+{"n": 3, "name": "Regigigas VSTAR (Galarian Gallery)", "set": "Crown Zenith Galarian Gallery", "num": "GG55", "num_src": "GG55", "setid": "swsh12pt5gg", "page": "Crown Zenith", "lang": "EN", "finish": "normal", "qty": 1,
+ "cm_id": 691935, "cm_exp": 5201, "cm_name": "Regigigas VSTAR [Giga Impact | Star Guardian]",
+ "trend": null, "avg30": null, "avg7": null, "avg1": null, "low": null, "cmd": null, "hist": {}, "verify": false, "verified": true,
+ "cm": "https://www.cardmarket.com/en/Pokemon/Products/Search?idExpansion=5201&searchString=Regigigas+VSTAR",
+ "cm_search": "https://www.cardmarket.com/en/Pokemon/Products/Search?idExpansion=5201&searchString=Regigigas+VSTAR"}
+]

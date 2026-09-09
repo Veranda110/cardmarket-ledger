@@ -1,0 +1,33 @@
+# How to RUN the project: which containers, what they may touch, how they are exposed.
+#
+#   docker compose up -d --build     build the image if needed, start both containers
+#   docker compose logs -f refresh   watch the refresh job
+#   docker compose down              stop and remove both containers (data/ is untouched)
+#
+# Moving to a server: copy this folder, run the first command. Remove the "ports" block
+# below and let a reverse proxy (Caddy) talk to the web container instead.
+
+services:
+
+  # The nightly job. Built from the Dockerfile next to this file.
+  # start.sh does one refresh on start (catch-up), then cron fires at 06:00.
+  refresh:
+    build: .
+    container_name: ledger
+    environment:
+      TZ: Europe/Amsterdam           # so cron's 06:00 is local time
+      PYTHONIOENCODING: utf-8
+    volumes:
+      - ./data:/app/data             # all state, read and write
+    restart: unless-stopped
+
+  # The web server. Ready-made image, nothing to build. Shows data/ on http://localhost:8080.
+  web:
+    image: nginx:1.27-alpine
+    container_name: ledger-web
+    ports:
+      - "8080:80"                    # PC door 8080 -> container door 80
+    volumes:
+      - ./data:/usr/share/nginx/html:ro                 # read-only
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped

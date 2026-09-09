@@ -1,0 +1,4 @@
+# Never send these to the image build. Data is mounted at run time,
+# __pycache__ is Python's throwaway cache.
+data/
+__pycache__/

@@ -57,6 +57,8 @@ tbody tr:hover td{background:var(--row-h)}
 .srch:hover,.srch:focus{color:var(--eur)}
 td.card a.srch{border-bottom:0}
 .rh{font-style:normal;color:var(--gold-ink);font-size:10px;letter-spacing:.05em;text-transform:uppercase}
+.pend{margin-left:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:1px 5px;border-radius:3px;border:1px solid var(--muted);color:var(--muted);vertical-align:middle}
+.pend.paid{text-transform:none;letter-spacing:0}
 .qty{margin-left:6px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--gold-ink);font-weight:600}
 .vf{display:inline-block;margin-left:6px;padding:0 5px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-ink);border:1px solid var(--gold);border-radius:2px;vertical-align:middle}
 .addbox{margin:0 0 14px;border:1px solid var(--line);background:var(--surface);font-size:13px}
@@ -152,11 +154,14 @@ document.getElementById('sub').textContent=D.reduce((a,c)=>a+Q(c),0)+' cards, '+
 document.getElementById('cap').innerHTML=`<b>Cardmarket export of ${fdate(NOW)}</b> all CM € and CM 7d € values on this page carry that date`;
 document.getElementById('h0lbl').textContent=fdate(H0).replace(/ (\d{4})$/,(m,y)=>' '+y.slice(2));
 document.querySelectorAll('.h0lbl').forEach(e=>e.textContent=fdate(H0));
+const bought=D.filter(c=>c.bought!=null), pending=bought.filter(c=>c.status==='pending');
+const bPaid=bought.reduce((a,c)=>a+c.bought*Q(c),0), bNow=bought.reduce((a,c)=>a+(c.trend||0)*Q(c),0);
 const top10=[...D].sort((a,b)=>(b.trend||0)*Q(b)-(a.trend||0)*Q(a)).slice(0,10).reduce((a,c)=>a+(c.trend||0)*Q(c),0);
 document.getElementById('stats').innerHTML=`
 <div class="stat"><div class="k">Cardmarket ${fdate(H0)}</div><div class="v">€${t0.toFixed(0)}</div><div class="n">same ${both.length} cards</div></div>
 <div class="stat"><div class="k">Change since then</div><div class="v ${pct>=0?'up':'down'}">${pct>=0?'+':''}${pct.toFixed(0)}%</div><div class="n">€${t0.toFixed(0)} to €${tNow.toFixed(0)}</div></div>
-<div class="stat"><div class="k">Top 10 cards</div><div class="v">€${top10.toFixed(0)}</div><div class="n">${(top10/tEur*100).toFixed(0)}% of total</div></div>`;
+<div class="stat"><div class="k">Top 10 cards</div><div class="v">€${top10.toFixed(0)}</div><div class="n">${(top10/tEur*100).toFixed(0)}% of total</div></div>
+${bought.length?`<div class="stat"><div class="k">Bought cards, paid vs now</div><div class="v ${bNow>=bPaid?'up':'down'}">${bNow>=bPaid?'+':''}${(bNow-bPaid).toFixed(2)}</div><div class="n">paid €${bPaid.toFixed(2)}, now €${bNow.toFixed(2)}${pending.length?`, ${pending.length} pending`:``}</div></div>`:``}`;
 const pages=[...new Set(D.map(c=>c.page))];
 const pf=document.getElementById('pagef'); pages.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;pf.appendChild(o)});
 let sortK='page',dir=1;
@@ -170,7 +175,7 @@ function render(){
   rows.forEach(c=>{
     if(sortK==='page'&&c.page!==last){last=c.page;const s=rows.filter(r=>r.page===c.page).reduce((a,r)=>a+(r.trend||0)*Q(r),0);h+=`<tr class="pagehead"><td colspan="7">${c.page}<span>€${s.toFixed(2)}</span></td></tr>`}
     const cls=c.chg==null?'':c.chg>=0?'up':'down';
-    h+=`<tr><td class="card"><a href="${c.cm}" target="_blank" rel="noopener" title="#${c.n}  ·  manage.py remove ${c.n}">${c.name}</a>${Q(c)>1?`<span class="qty">×${Q(c)}</span>`:``}<a class="srch" href="${c.cm_search}" target="_blank" rel="noopener" title="Search this card on Cardmarket (expansion + name), fallback if the direct link is broken">⌕</a>${c.verify&&!c.verified?`<span class="vf" title="Two Cardmarket products share this name and set at a similar price. Open the link and confirm the trend shown there matches.">verify</span>`:``}</td>
+    h+=`<tr><td class="card"><a href="${c.cm}" target="_blank" rel="noopener" title="#${c.n}  ·  manage.py remove ${c.n}">${c.name}</a>${Q(c)>1?`<span class="qty">×${Q(c)}</span>`:``}<a class="srch" href="${c.cm_search}" target="_blank" rel="noopener" title="Search this card on Cardmarket (expansion + name), fallback if the direct link is broken">⌕</a>${c.verify&&!c.verified?`<span class="vf" title="Two Cardmarket products share this name and set at a similar price. Open the link and confirm the trend shown there matches.">verify</span>`:``}${c.status==='pending'?`<span class="pend" title="Bought ${fdate(c.bought_on)} for €${eur(c.bought)} incl. shipping, not yet arrived. Clear with: manage.py arrived ${c.n}">pending</span>`:c.bought!=null?`<span class="pend paid" title="Bought ${fdate(c.bought_on)} for €${eur(c.bought)} incl. shipping">paid ${eur(c.bought)}</span>`:``}</td>
     <td class="set c-set">${c.set}<span class="num">${c.num}${c.finish==='reverse'?' <em class="rh">reverse holo</em>':''}</span></td><td class="lang c-lang">${c.lang}</td>
     <td class="num eur">${eur(c.trend)}</td><td class="num c-avg7">${eur(c.avg7)}</td>
     <td class="num">${eur(c.h0)}</td><td class="num chg ${cls}">${c.chg==null?'–':(c.chg>=0?'+':'')+c.chg.toFixed(0)+'%'}</td></tr>`});

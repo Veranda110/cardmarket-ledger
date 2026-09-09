@@ -20,7 +20,7 @@ How `add` finds the Cardmarket product (the one-time match, same method as the o
   4. validate.py runs; on FAIL the add is rolled back.
 Then run refresh.py (or wait for the nightly task) and republish the page.
 """
-import json, csv, sys, os, re, argparse, urllib.request, urllib.parse, shutil, subprocess, collections
+import datetime, json, csv, sys, os, re, argparse, urllib.request, urllib.parse, shutil, subprocess, collections
 
 CODE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.environ.get('LEDGER_DATA', os.path.join(CODE, 'data'))
@@ -140,6 +140,8 @@ def cmd_add(a):
                 trend=g.get('trend' + key), avg30=g.get('avg30' + key), avg7=g.get('avg7' + key), avg1=g.get('avg1' + key), low=g.get('low' + key),
                 cmd=load(PRICES)['createdAt'][:10], hist={}, verify=len(cands) > 1, verified=False,
                 cm=search, cm_search=search)
+    if a.bought is not None: card['bought'] = a.bought; card['bought_on'] = datetime.date.today().isoformat()
+    if a.pending: card['status'] = 'pending'      # bought, not yet in hand; cleared with `manage.py arrived n`
     shutil.copy('binder.json', 'binder.last_good.json'); shutil.copy('cards.csv', 'cards.last_good.csv')
     binder.append(card); save('binder.json', binder); write_cards_csv(binder)
     if subprocess.run([sys.executable, os.path.join(CODE, 'validate.py')]).returncode != 0:
@@ -184,6 +186,14 @@ def cmd_verify(a):
     c['verified'] = True; save('binder.json', binder); print(f"#{a.n} {c['name']} marked verified")
 
 
+def cmd_arrived(a):
+    binder = load('binder.json'); c = next((c for c in binder if c['n'] == a.n), None)
+    if not c: sys.exit(f"no card #{a.n}")
+    if c.get('status') != 'pending': sys.exit(f"#{a.n} {c['name']} is not pending")
+    del c['status']; save('binder.json', binder)
+    print(f"#{a.n} {c['name']} arrived. Now run refresh.py and republish.")
+
+
 def cmd_list(a):
     for c in load('binder.json'):
         print(f"{c['n']:>3} {c['name'][:32]:32} {c['set'][:28]:28} {c['num']:>6} {c.get('lang','EN')} {c.get('finish','normal'):7} x{c.get('qty',1)} cm {c['cm_id']:>6}  €{c.get('trend')}")
@@ -195,10 +205,12 @@ if __name__ == '__main__':
     s = sub.add_parser('add'); s.add_argument('name'); s.add_argument('setid'); s.add_argument('number')
     s.add_argument('--page', default='New'); s.add_argument('--lang', default='EN'); s.add_argument('--set-name', default=None)
     s.add_argument('--reverse', action='store_true', help='reverse holo copy'); s.add_argument('--cm-id', type=int); s.add_argument('--cm-exp', type=int)
+    s.add_argument('--bought', type=float, help='price paid incl. shipping, EUR'); s.add_argument('--pending', action='store_true', help='bought, not yet arrived')
     s.set_defaults(f=cmd_add)
     s = sub.add_parser('remove'); s.add_argument('n', type=int); s.set_defaults(f=cmd_remove)
     s = sub.add_parser('finish'); s.add_argument('n', type=int); s.add_argument('finish', choices=['normal', 'reverse']); s.set_defaults(f=cmd_finish)
     s = sub.add_parser('qty'); s.add_argument('n', type=int); s.add_argument('qty', type=int); s.set_defaults(f=cmd_qty)
     s = sub.add_parser('verify'); s.add_argument('n', type=int); s.set_defaults(f=cmd_verify)
+    s = sub.add_parser('arrived'); s.add_argument('n', type=int); s.set_defaults(f=cmd_arrived)
     s = sub.add_parser('list'); s.set_defaults(f=cmd_list)
     a = ap.parse_args(); a.f(a)

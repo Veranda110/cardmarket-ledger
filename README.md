@@ -66,7 +66,12 @@ py -3.13 manage.py add "Mew" cel25 11 --page "Pikachu" --set-name Celebrations
 py -3.13 manage.py qty 19 2
 py -3.13 manage.py finish 12 reverse
 py -3.13 manage.py remove 57
+py -3.13 manage.py add "Lucario" sma SV22 --page Investments --bought 19.65 --pending
+py -3.13 manage.py arrived 58
 ```
+
+`--bought` records the price paid including shipping; the page then shows paid vs now for those
+cards. `--pending` marks a card bought but not yet in hand (tag on the page), `arrived` clears it.
 
 Set codes are pokemontcg.io's (`cel25`, `swsh12pt5`, `sv3`), see the
 [card list folder](https://github.com/PokemonTCG/pokemon-tcg-data/tree/master/cards/en).

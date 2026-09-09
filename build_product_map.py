@@ -104,6 +104,32 @@ for e, s in lab.items():
         if par == s and sub in sn: sets_in_exp[e].add(sub)      # expansion labelled with the parent: add its sub-sets
         if sub == s and par in sn: sets_in_exp[e].add(par)      # expansion labelled with a sub-set: add the parent too
 
+def uniques(e, sets):
+    """products in expansion e whose normalised name occurs once among products and once among the sets' entries"""
+    prods = [p for p in byexp[e] if p['idProduct'] in snaps[today] and is_card(p['name'])]
+    gp = collections.defaultdict(list); ge = collections.defaultdict(list)
+    for p in prods: gp[norm_name(p['name'])].append(p)
+    for s in sorted(sets):
+        for x in sn.get(s, []): ge[norm_name(x[0])].append((s, x))
+    for name, ps in gp.items():
+        if len(ps) == 1 and len(ge.get(name, [])) == 1: yield ps[0], ge[name][0]
+
+# --- fingerprint reliability per set. pokemontcg.io's Cardmarket prices are only a usable tiebreaker when, for the cards
+# that need no tiebreak (unique name), they agree with the prices in our exports. Where they do not (old sets whose
+# mirror prices point at another printing, 151 in 2026), ties fall back to price rank vs rarity rank.
+FP_AGREE = math.log(1.5); FP_MIN_RATE = 0.5; FP_MIN_N = 5
+fp_stat = collections.defaultdict(lambda: [0, 0])
+for e, sets in sets_in_exp.items():
+    for p, (s, x) in uniques(e, sets):
+        rec = next((c for c in fp.get(s, []) if c['number'] == x[1]), None)
+        if not (rec and rec.get('trend') and rec.get('avg30')): continue
+        d = dist((rec['trend'], rec['avg30']), price_vec(p['idProduct']))
+        if d is None: continue
+        fp_stat[s][0] += 1; fp_stat[s][1] += d < FP_AGREE
+fp_ok = {s: (n < FP_MIN_N or hits / n >= FP_MIN_RATE) for s, (n, hits) in fp_stat.items()}
+fp_unreliable = sorted(s for s, ok in fp_ok.items() if not ok)
+print(f"fingerprint unreliable for {len(fp_unreliable)} sets (falls back to rarity rank): {fp_unreliable}")
+
 mapping = {}; report = collections.Counter(); unmatched_products = []; unmatched_entries = []
 for e, sets in sets_in_exp.items():
     prods = [p for p in byexp[e] if p['idProduct'] in snaps[today] and is_card(p['name'])]
@@ -137,7 +163,7 @@ for e, sets in sets_in_exp.items():
             fpd = {}
             for s, x in cands:
                 rec = next((c for c in fp.get(s, []) if c['number'] == x[1]), None)
-                if rec and rec.get('trend') and rec.get('avg30'): fpd[(s, x[1])] = (rec['trend'], rec['avg30'])
+                if rec and rec.get('trend') and rec.get('avg30') and fp_ok.get(s, True): fpd[(s, x[1])] = (rec['trend'], rec['avg30'])
             assigned = {}
             if fpd:
                 pairs = []
@@ -163,6 +189,12 @@ for e, sets in sets_in_exp.items():
                 for i, p in enumerate(left_p):
                     s, x = left_e[min(i, len(left_e) - 1)]
                     assigned[p['idProduct']] = ((s, x[1]), 'low' if len(left_p) != len(left_e) else 'medium', 'price rank vs rarity')
+            left_p = [p for p in group if p['idProduct'] not in assigned]
+            if left_p and assigned:
+                for p in left_p:
+                    t = snaps[today][p['idProduct']].get('trend') or 0.01
+                    near = min(assigned, key=lambda q: abs(math.log(t / ((snaps[today][q].get('trend') or 0.01)))))
+                    assigned[p['idProduct']] = (assigned[near][0], 'low', f'variant of product {near} (same name and attacks; oversized, stamped or duplicate listing)')
             for p in group:
                 if p['idProduct'] in assigned:
                     (s, num), conf, how = assigned[p['idProduct']]
@@ -195,7 +227,8 @@ for e, sets in sets_in_exp.items():
             report['expansion suspect'] += 1
 
 json.dump(mapping, open('products_map.json', 'w', encoding='utf-8'), indent=0)
-json.dump({'unmatched_products': unmatched_products, 'unmatched_entries': unmatched_entries, 'expansion_fingerprint_agreement': twin},
+json.dump({'unmatched_products': unmatched_products, 'unmatched_entries': unmatched_entries, 'expansion_fingerprint_agreement': twin,
+           'fingerprint_unreliable_sets': fp_unreliable, 'fingerprint_agreement_per_set': {s: dict(compared=n, hits=h) for s, (n, h) in fp_stat.items()}},
           open('products_map_report.json', 'w', encoding='utf-8'), indent=0)
 labelled = sum(len(byexp[e]) for e in sets_in_exp)
 print(f"products in labelled English expansions: {labelled}; mapped: {len(mapping)}")

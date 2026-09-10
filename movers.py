@@ -12,6 +12,11 @@ Rules (all deterministic, no external calls):
              far from the 7-day average; those are not moves)
   liquidity  once 7 exports exist: the trend must have changed on at least LIQ_DAYS of the last 7 day pairs
              (Cardmarket recalculates the trend from sales, a card that never moves is not trading)
+  confirmed  once 7 exports exist: a climber must have moved up on at least CONFIRM of those day pairs and down
+             on at most 1; droppers mirrored. One odd sale is one jump followed by flat or a drift back, a real
+             move is several recalculations in the same direction. The export's own 7/30-day averages update
+             on a slower schedule than the trend, so they cannot serve as this check.
+  Until 7 daily exports exist the output is marked PREVIEW: a 1-day trend jump cannot be verified.
 """
 import json, glob, os, sys, datetime, urllib.parse
 
@@ -20,10 +25,11 @@ BAND_LOW, BAND_HIGH = 5.0, 20.0
 WINDOW = 7
 GUARD = 0.30
 LIQ_DAYS = 3
+CONFIRM = 3
 TOP = 3
 
 
-def pick(series, today, ref, band=(BAND_LOW, BAND_HIGH), guard=GUARD, liq_days=LIQ_DAYS, top=TOP):
+def pick(series, today, ref, band=(BAND_LOW, BAND_HIGH), guard=GUARD, liq_days=LIQ_DAYS, confirm=CONFIRM, top=TOP):
     """Pure function. series: {pid: {date: {'trend', 'avg7'}}} for the candidate universe; dates ISO strings.
     Returns (climbers, droppers, n_considered); each row is a dict with pid, ref, now, chg, pct."""
     rows = []
@@ -36,15 +42,21 @@ def pick(series, today, ref, band=(BAND_LOW, BAND_HIGH), guard=GUARD, liq_days=L
         if b.get('avg7') and abs(b['trend'] / b['avg7'] - 1) > guard:
             continue
         days = sorted(d for d in s if d <= today)[-8:]          # last 7 day pairs
+        ups = downs = None
         if len(days) >= 8:
-            moves = sum(1 for x, y in zip(days, days[1:]) if s[x].get('trend') != s[y].get('trend'))
-            if moves < liq_days:
+            pairs = [(s[x].get('trend') or 0, s[y].get('trend') or 0) for x, y in zip(days, days[1:])]
+            ups = sum(1 for x, y in pairs if y > x); downs = sum(1 for x, y in pairs if y < x)
+            if ups + downs < liq_days:
                 continue
         rows.append(dict(pid=pid, ref=a['trend'], now=b['trend'], chg=round(b['trend'] - a['trend'], 2),
-                         pct=round((b['trend'] / a['trend'] - 1) * 100, 1)))
+                         pct=round((b['trend'] / a['trend'] - 1) * 100, 1), ups=ups, downs=downs))
     rows.sort(key=lambda r: r['pct'])
-    climbers = [r for r in rows[::-1] if r['pct'] > 0][:top]
-    droppers = [r for r in rows if r['pct'] < 0][:top]
+    def confirmed(r, up):
+        if r['ups'] is None: return True                     # fewer than 7 exports: rule not applicable (PREVIEW)
+        same, other = (r['ups'], r['downs']) if up else (r['downs'], r['ups'])
+        return same >= confirm and other <= 1
+    climbers = [r for r in rows[::-1] if r['pct'] > 0 and confirmed(r, True)][:top]
+    droppers = [r for r in rows if r['pct'] < 0 and confirmed(r, False)][:top]
     return climbers, droppers, len(rows)
 
 
@@ -87,9 +99,12 @@ def main():
     note = (f"{span}-day window." if span >= WINDOW else
             f"{span}-day change: the daily archive started on {daily_start}, the window grows to {WINDOW} days on "
             f"{(datetime.date.fromisoformat(daily_start) + datetime.timedelta(days=WINDOW)).isoformat()}.")
+    preview = "" if span >= WINDOW else (f"**PREVIEW, not for posting.** Only {span + 1} daily exports exist; a trend jump over one or two days "
+                                         f"cannot be told apart from a single odd sale. The first postable version comes with the 7-day window.\n\n")
     post = f"""# Cardmarket Pokémon movers, {today}
 
-Cardmarket's own daily price export, Price Trend in EUR. English cards, identity verified against the set list, trend €{BAND_LOW:.0f} to €{BAND_HIGH:.0f} at the start of the window, today's trend within {GUARD:.0%} of the 7-day average so one odd sale does not count as a move. {n:,} cards qualified. {note}
+{preview}
+Cardmarket's own daily price export, Price Trend in EUR. English cards, identity verified against the set list, trend €{BAND_LOW:.0f} to €{BAND_HIGH:.0f} at the start of the window, today's trend within {GUARD:.0%} of the 7-day average, and the trend must have moved the same way on at least {CONFIRM} of the last 7 days so one odd sale does not count as a move. {n:,} cards qualified. {note}
 
 {table('Biggest climbers', climbers)}
 {table('Biggest droppers', droppers)}

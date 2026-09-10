@@ -40,6 +40,16 @@ class Pick(unittest.TestCase):
         up2, _, _ = pick({1: s(10, 12)}, T, R)
         self.assertEqual([r['pid'] for r in up2], [1])
 
+    def test_single_sale_jump_is_not_confirmed_with_seven_days(self):
+        # Misty's Psyduck case: flat for six days, one jump on the last day -> not a climber.
+        # A card that rose on four of seven days with one dip is.
+        days = [f'2026-09-{d:02d}' for d in range(3, 11)]
+        jump = {d: {'trend': 11.1, 'avg7': 12.4} for d in days}; jump[T] = {'trend': 15.4, 'avg7': 12.4}
+        steady = {d: {'trend': 10 + [0, .5, 1, .8, 1.4, 2, 2.6, 3][i], 'avg7': 12} for i, d in enumerate(days)}
+        up, _, _ = pick({1: jump, 2: steady}, T, days[0])
+        self.assertEqual([r['pid'] for r in up], [2])
+        self.assertEqual((up[0]['ups'], up[0]['downs']), (6, 1))
+
     def test_missing_prices_are_skipped(self):
         series = {1: {T: {'trend': 12, 'avg7': 12}}, 2: s(None, 12), 3: s(10, None)}
         up, down, n = pick(series, T, R)

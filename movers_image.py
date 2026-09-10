@@ -55,6 +55,9 @@ def main():
     d.text((60, 118), f"{mv['date']}  ·  Price Trend in EUR  ·  English cards €5 to €20  ·  {span}-day change  ·  {mv['considered']:,} cards compared",
            font=f_sub, fill=MUTED)
     d.line((60, 165, W - 60, 165), fill=(50, 55, 68), width=2)
+    if span < 7:   # same rule as movers.py: a one- or two-day trend jump cannot be verified
+        d.text((W - 60 - d.textlength('PREVIEW  ·  not for posting until the 7-day window exists', font=f_sub), 20),
+               'PREVIEW  ·  not for posting until the 7-day window exists', font=f_sub, fill=GOLD)
 
     def section(y, title, rows, color):
         d.text((60, y), title, font=f_h, fill=color)

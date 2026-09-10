@@ -155,13 +155,13 @@ document.getElementById('cap').innerHTML=`<b>Cardmarket export of ${fdate(NOW)}<
 document.getElementById('h0lbl').textContent=fdate(H0).replace(/ (\d{4})$/,(m,y)=>' '+y.slice(2));
 document.querySelectorAll('.h0lbl').forEach(e=>e.textContent=fdate(H0));
 const bought=D.filter(c=>c.bought!=null), pending=bought.filter(c=>c.status==='pending');
-const bPaid=bought.reduce((a,c)=>a+c.bought*Q(c),0), bNow=bought.reduce((a,c)=>a+(c.trend||0)*Q(c),0);
+const bPaid=bought.reduce((a,c)=>a+c.bought*Q(c),0), bNow=bought.reduce((a,c)=>a+(c.avg30||c.trend||0)*Q(c),0);   // 30-day average: the trend jumps on single sales
 const top10=[...D].sort((a,b)=>(b.trend||0)*Q(b)-(a.trend||0)*Q(a)).slice(0,10).reduce((a,c)=>a+(c.trend||0)*Q(c),0);
 document.getElementById('stats').innerHTML=`
 <div class="stat"><div class="k">Cardmarket ${fdate(H0)}</div><div class="v">€${t0.toFixed(0)}</div><div class="n">same ${both.length} cards</div></div>
 <div class="stat"><div class="k">Change since then</div><div class="v ${pct>=0?'up':'down'}">${pct>=0?'+':''}${pct.toFixed(0)}%</div><div class="n">€${t0.toFixed(0)} to €${tNow.toFixed(0)}</div></div>
 <div class="stat"><div class="k">Top 10 cards</div><div class="v">€${top10.toFixed(0)}</div><div class="n">${(top10/tEur*100).toFixed(0)}% of total</div></div>
-${bought.length?`<div class="stat"><div class="k">Bought cards, paid vs now</div><div class="v ${bNow>=bPaid?'up':'down'}">${bNow>=bPaid?'+':''}${(bNow-bPaid).toFixed(2)}</div><div class="n">paid €${bPaid.toFixed(2)}, now €${bNow.toFixed(2)}${pending.length?`, ${pending.length} pending`:``}</div></div>`:``}`;
+${bought.length?`<div class="stat"><div class="k">Bought cards, paid vs 30-day avg</div><div class="v ${bNow>=bPaid?'up':'down'}">${bNow>=bPaid?'+':''}${(bNow-bPaid).toFixed(2)}</div><div class="n">paid €${bPaid.toFixed(2)}, 30d avg €${bNow.toFixed(2)}${pending.length?`, ${pending.length} pending`:``}</div></div>`:``}`;
 const pages=[...new Set(D.map(c=>c.page))];
 const pf=document.getElementById('pagef'); pages.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;pf.appendChild(o)});
 let sortK='page',dir=1;

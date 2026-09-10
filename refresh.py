@@ -67,6 +67,7 @@ for c in b:
     c.update(trend=g["trend" + k], avg30=g["avg30" + k], avg7=g["avg7" + k], avg1=g["avg1" + k], low=g["low" + k],
              cmd=date, upd=date, est=False)
     c.setdefault("hist", {})[date] = g["trend" + k]
+    c.setdefault("hist30", {})[date] = g["avg30" + k]   # 30-day average per day: the page values on this, the trend jumps on single sales
 json.dump(b, open("binder.json", "w", encoding="utf-8"), indent=0)
 
 total = sum((c["trend"] or 0) * c.get("qty", 1) for c in b)

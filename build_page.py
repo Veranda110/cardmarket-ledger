@@ -91,11 +91,11 @@ select:focus,input:focus,th:focus{outline:2px solid var(--gold);outline-offset:1
 <div class="wrap">
 <header>
   <div><h1>Binder Ledger</h1><div class="sub"><span id="sub"></span> <button id="theme" class="theme" type="button" aria-label="Switch colour theme">Dark</button></div></div>
-  <div class="total"><div class="lbl">Cardmarket trend, near mint</div><div class="val"><small>€</small><span id="totEur"></span></div></div>
+  <div class="total"><div class="lbl">Cardmarket 30-day average, near mint</div><div class="val"><small>€</small><span id="totEur"></span></div></div>
 </header>
 <div class="stats" id="stats"></div>
 <div class="controls">
-  <label>Sort <select id="sort"><option value="page">Binder page</option><option value="trend">Cardmarket €</option><option value="chg">Change since Dec 24</option><option value="name">Name</option></select></label>
+  <label>Sort <select id="sort"><option value="page">Binder page</option><option value="avg30">Cardmarket 30d €</option><option value="trend">Cardmarket trend €</option><option value="chg">Change since Dec 24</option><option value="name">Name</option></select></label>
   <label>Page <select id="pagef"><option value="">All</option></select></label>
   <input type="search" id="q" placeholder="Search card or set">
 </div>
@@ -117,7 +117,7 @@ select:focus,input:focus,th:focus{outline:2px solid var(--gold);outline-offset:1
 </details>
 <div class="tablewrap"><table id="t"><caption id="cap"></caption><thead><tr>
 <th data-k="name">Card</th><th class="c-set" data-k="set">Set</th><th class="c-lang" data-k="lang">Lang</th>
-<th class="num" data-k="trend">CM €</th><th class="num c-avg7" data-k="avg7">CM 7d €</th>
+<th class="num" data-k="avg30">CM 30d €</th><th class="num c-avg7" data-k="trend">CM trend €</th>
 <th class="num" data-k="h0">CM € <span id="h0lbl"></span></th><th class="num" data-k="chg">Change</th>
 </tr></thead><tbody id="tb"></tbody></table></div>
 <section class="sources">
@@ -143,20 +143,21 @@ const D=__DATA__;
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fdate=d=>{if(!d)return '';const [y,m,dd]=d.split('-');return `${+dd} ${MON[+m-1]} ${y}`};
 const eur=v=>v==null?'–':v.toFixed(2);
-const days=Object.keys(D[0].hist).sort(); const H0=days[0]; const NOW=D[0].cmd;
-D.forEach(c=>{c.h0=c.hist[H0];c.chg=(c.h0&&c.trend)?(c.trend-c.h0)/c.h0*100:null});
+const V=c=>c.avg30!=null?c.avg30:c.trend;   // page value = 30-day average (trend only if the export has none)
+const days=Object.keys(D[0].hist30||D[0].hist).sort(); const H0=days[0]; const NOW=D[0].cmd;
+D.forEach(c=>{c.h0=(c.hist30||{})[H0];c.chg=(c.h0&&V(c)!=null)?(V(c)-c.h0)/c.h0*100:null});
 const Q=c=>c.qty||1;
-const tEur=D.reduce((a,c)=>a+(c.trend||0)*Q(c),0);
-const both=D.filter(c=>c.h0!=null&&c.trend!=null);
-const t0=both.reduce((a,c)=>a+c.h0*Q(c),0), tNow=both.reduce((a,c)=>a+c.trend*Q(c),0), pct=(tNow-t0)/t0*100;
+const tEur=D.reduce((a,c)=>a+(V(c)||0)*Q(c),0);
+const both=D.filter(c=>c.h0!=null&&V(c)!=null);
+const t0=both.reduce((a,c)=>a+c.h0*Q(c),0), tNow=both.reduce((a,c)=>a+V(c)*Q(c),0), pct=(tNow-t0)/t0*100;
 document.getElementById('totEur').textContent=tEur.toFixed(0);
 document.getElementById('sub').textContent=D.reduce((a,c)=>a+Q(c),0)+' cards, '+D.length+' distinct, '+new Set(D.map(c=>c.set)).size+' sets, 8 binder pages';
-document.getElementById('cap').innerHTML=`<b>Cardmarket export of ${fdate(NOW)}</b> all CM € and CM 7d € values on this page carry that date`;
+document.getElementById('cap').innerHTML=`<b>Cardmarket export of ${fdate(NOW)}</b> all CM 30d € and CM trend € values on this page carry that date`;
 document.getElementById('h0lbl').textContent=fdate(H0).replace(/ (\d{4})$/,(m,y)=>' '+y.slice(2));
 document.querySelectorAll('.h0lbl').forEach(e=>e.textContent=fdate(H0));
 const bought=D.filter(c=>c.bought!=null), pending=bought.filter(c=>c.status==='pending');
 const bPaid=bought.reduce((a,c)=>a+c.bought*Q(c),0), bNow=bought.reduce((a,c)=>a+(c.avg30||c.trend||0)*Q(c),0);   // 30-day average: the trend jumps on single sales
-const top10=[...D].sort((a,b)=>(b.trend||0)*Q(b)-(a.trend||0)*Q(a)).slice(0,10).reduce((a,c)=>a+(c.trend||0)*Q(c),0);
+const top10=[...D].sort((a,b)=>(V(b)||0)*Q(b)-(V(a)||0)*Q(a)).slice(0,10).reduce((a,c)=>a+(V(c)||0)*Q(c),0);
 document.getElementById('stats').innerHTML=`
 <div class="stat"><div class="k">Cardmarket ${fdate(H0)}</div><div class="v">€${t0.toFixed(0)}</div><div class="n">same ${both.length} cards</div></div>
 <div class="stat"><div class="k">Change since then</div><div class="v ${pct>=0?'up':'down'}">${pct>=0?'+':''}${pct.toFixed(0)}%</div><div class="n">€${t0.toFixed(0)} to €${tNow.toFixed(0)}</div></div>
@@ -165,7 +166,7 @@ ${bought.length?`<div class="stat"><div class="k">Bought cards, paid vs 30-day a
 const pages=[...new Set(D.map(c=>c.page))];
 const pf=document.getElementById('pagef'); pages.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;pf.appendChild(o)});
 let sortK='page',dir=1;
-const numK=['trend','avg7','h0','chg'];
+const numK=['avg30','trend','h0','chg'];
 function render(){
   const q=document.getElementById('q').value.toLowerCase(), pg=pf.value;
   let rows=D.filter(c=>(!pg||c.page===pg)&&(!q||(c.name+' '+c.set+' '+c.num).toLowerCase().includes(q)));
@@ -173,11 +174,11 @@ function render(){
   else rows.sort((a,b)=>{let x=a[sortK],y=b[sortK]; if(numK.includes(sortK)){x=x==null?-Infinity:x;y=y==null?-Infinity:y;return (y-x)*dir} return String(x).localeCompare(String(y))*dir});
   const tb=document.getElementById('tb'); let h='',last=null;
   rows.forEach(c=>{
-    if(sortK==='page'&&c.page!==last){last=c.page;const s=rows.filter(r=>r.page===c.page).reduce((a,r)=>a+(r.trend||0)*Q(r),0);h+=`<tr class="pagehead"><td colspan="7">${c.page}<span>€${s.toFixed(2)}</span></td></tr>`}
+    if(sortK==='page'&&c.page!==last){last=c.page;const s=rows.filter(r=>r.page===c.page).reduce((a,r)=>a+(V(r)||0)*Q(r),0);h+=`<tr class="pagehead"><td colspan="7">${c.page}<span>€${s.toFixed(2)}</span></td></tr>`}
     const cls=c.chg==null?'':c.chg>=0?'up':'down';
     h+=`<tr><td class="card"><a href="${c.cm}" target="_blank" rel="noopener" title="#${c.n}  ·  manage.py remove ${c.n}">${c.name}</a>${Q(c)>1?`<span class="qty">×${Q(c)}</span>`:``}<a class="srch" href="${c.cm_search}" target="_blank" rel="noopener" title="Search this card on Cardmarket (expansion + name), fallback if the direct link is broken">⌕</a>${c.verify&&!c.verified?`<span class="vf" title="Two Cardmarket products share this name and set at a similar price. Open the link and confirm the trend shown there matches.">verify</span>`:``}${c.status==='pending'?`<span class="pend" title="Bought ${fdate(c.bought_on)} for €${eur(c.bought)} incl. shipping, not yet arrived. Clear with: manage.py arrived ${c.n}">pending</span>`:c.bought!=null?`<span class="pend paid" title="Bought ${fdate(c.bought_on)} for €${eur(c.bought)} incl. shipping">paid ${eur(c.bought)}</span>`:``}</td>
     <td class="set c-set">${c.set}<span class="num">${c.num}${c.finish==='reverse'?' <em class="rh">reverse holo</em>':''}</span></td><td class="lang c-lang">${c.lang}</td>
-    <td class="num eur">${eur(c.trend)}</td><td class="num c-avg7">${eur(c.avg7)}</td>
+    <td class="num eur">${eur(V(c))}</td><td class="num c-avg7">${eur(c.trend)}</td>
     <td class="num">${eur(c.h0)}</td><td class="num chg ${cls}">${c.chg==null?'–':(c.chg>=0?'+':'')+c.chg.toFixed(0)+'%'}</td></tr>`});
   tb.innerHTML=h;
   document.querySelectorAll('th').forEach(th=>{th.classList.toggle('sorted',th.dataset.k===sortK);const a=th.querySelector('.arr');if(a)a.remove();if(th.dataset.k===sortK){const s=document.createElement('span');s.className='arr';s.textContent=dir>0?'▾':'▴';th.appendChild(s)}});

@@ -9,8 +9,8 @@ this just keeps it.
 
 ## What you get
 
-- `binder_ledger.html`: your cards, today's Cardmarket trend and 7-day average, a history
-  column, sortable, dark mode. Served at http://localhost:8080.
+- `binder_ledger.html`: your cards valued at Cardmarket's 30-day average (the trend jumps on
+  single sales, so it is shown as a second column), a history column, sortable, dark mode. Served at http://localhost:8080.
 - `data/history/price_guide_6_YYYYMMDD.json`: one copy of Cardmarket's export per day.
   Every product on Cardmarket Pokémon, about 17 MB a day. Nobody else keeps these publicly.
 - A validator that refuses to build if a card is matched to the wrong product.
@@ -117,7 +117,7 @@ Refreshing never repeats this, it looks up the stored id in the day's export.
 - Card lists per set: <https://github.com/PokemonTCG/pokemon-tcg-data>
 - Older exports: the [Wayback Machine](https://web.archive.org/web/*/downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_6.json)
 
-Prices are Cardmarket's "Price Trend" and averages for the product as a whole (all languages
+Page values are Cardmarket's 30-day average; "Price Trend" is kept alongside. Both are for the product as a whole (all languages
 and conditions listed under it). Reverse holo rows use the export's reverse-holo fields.
 
 ## Tests

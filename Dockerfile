@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Put the five scripts on the shelf at /app. Nothing runs yet.
 # data/ is deliberately NOT copied: it is mounted at run time.
-COPY refresh.py validate.py build_page.py manage.py movers.py test_validate.py test_movers.py ./
+COPY refresh.py validate.py build_page.py manage.py movers.py movers_image.py test_validate.py test_movers.py ./
 
 # The start script: catch-up refresh on every container start, then cron.
 COPY start.sh /app/start.sh
@@ -15,9 +15,11 @@ RUN chmod +x /app/start.sh
 # so a broken image can never exist.
 RUN python -m unittest test_validate test_movers -v
 
-# Install cron, the Linux scheduler. The slim image does not have it.
+# Install cron, the Linux scheduler, and the DejaVu font for the movers PNG. The slim image has neither.
 # rm -rf afterwards deletes the package index to keep the image small.
-RUN apt-get update && apt-get install -y --no-install-recommends cron && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends cron fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+# Pillow draws the movers PNG. Pinned so a rebuild months later gets the same library.
+RUN pip install --no-cache-dir pillow==12.3.0
 
 # Write one schedule line and load it into cron.
 #   0 6 * * *   = minute 0, hour 6, every day

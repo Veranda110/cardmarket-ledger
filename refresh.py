@@ -82,4 +82,5 @@ if v.returncode != 0:
 subprocess.run([sys.executable, os.path.join(CODE, "build_page.py")], check=True)
 print("binder_ledger.html rebuilt. Publish it with the same artifact URL to update the page.")
 subprocess.run([sys.executable, os.path.join(CODE, "movers.py")], stdout=subprocess.DEVNULL)   # daily movers post -> movers.md
-print("movers.md written (biggest climbers and droppers, EUR 5-20 band).")
+subprocess.run([sys.executable, os.path.join(CODE, "movers_image.py")])                          # the same as a PNG
+print("movers.md and movers.png written (biggest climbers and droppers, EUR 5-20 band).")

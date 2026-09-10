@@ -40,6 +40,7 @@ Open http://localhost:8080. Every container start also refreshes, so a machine t
 | `validate.py` | hard checks on the collection; a FAIL rolls back and blocks the build (`test_validate.py` covers it) |
 | `build_page.py` | renders `data/binder_ledger.html` from `data/binder.json` |
 | `manage.py` | add, remove, set quantity or finish, mark verified. The only way to change the card set |
+| `movers.py` | after each refresh: biggest climbers and droppers among English cards (EUR 5-20 band, 7-day window, spike guard) -> `data/movers.md`, a paste-ready post |
 | `build_product_map.py` | one-time (and per new set): maps every English Cardmarket product id to set code, number, name, rarity, with a confidence grade. Output `data/products_map.json` |
 | `Dockerfile`, `start.sh` | the refresh container: Python + cron |
 | `compose.yml`, `nginx.conf` | both containers and the web server config |
@@ -56,6 +57,7 @@ Everything with state lives in `data/`:
 | `price_guide_6.json`, `products_singles_6.json` | today's downloads, overwritten daily |
 | `history/` | the archive, one export per day |
 | `binder_ledger.html` | the built page |
+| `movers.md`, `movers.json` | the daily movers post and its rows |
 
 `LEDGER_DATA` overrides the data folder (default `./data`).
 

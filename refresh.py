@@ -81,3 +81,5 @@ if v.returncode != 0:
     sys.exit(1)
 subprocess.run([sys.executable, os.path.join(CODE, "build_page.py")], check=True)
 print("binder_ledger.html rebuilt. Publish it with the same artifact URL to update the page.")
+subprocess.run([sys.executable, os.path.join(CODE, "movers.py")], stdout=subprocess.DEVNULL)   # daily movers post -> movers.md
+print("movers.md written (biggest climbers and droppers, EUR 5-20 band).")

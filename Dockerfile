@@ -6,14 +6,14 @@ WORKDIR /app
 
 # Put the five scripts on the shelf at /app. Nothing runs yet.
 # data/ is deliberately NOT copied: it is mounted at run time.
-COPY refresh.py validate.py build_page.py manage.py test_validate.py ./
+COPY refresh.py validate.py build_page.py manage.py movers.py test_validate.py test_movers.py ./
 
 # The start script: catch-up refresh on every container start, then cron.
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 # Run the unit tests while building. A failing test aborts the build,
 # so a broken image can never exist.
-RUN python -m unittest test_validate -v
+RUN python -m unittest test_validate test_movers -v
 
 # Install cron, the Linux scheduler. The slim image does not have it.
 # rm -rf afterwards deletes the package index to keep the image small.

@@ -1,9 +1,9 @@
 """Two outputs that turn the daily export into something you can act on fast.
 
-1. data/wants.txt  - a Cardmarket want-list import: the cards that pass the buy screen, one per line in
-   Cardmarket's "Name Attack Attack" format, with the max price to set written next to it as a comment.
-   Cardmarket then watches the market in real time and tells you when a copy is listed under your price.
-   That is the fast path; a once-a-day export can never be, see below.
+1. data/wants.txt and data/wants/*.txt - Cardmarket want-list imports: the cards that pass the buy screen,
+   one per line in Cardmarket's "Name Attack Attack" format, split into files of MAX_PER_LIST grouped by
+   value. Cardmarket then watches the market itself and mails you when a matching copy is listed. That is
+   the fast path; a once-a-day export can never be, see below.
 
 2. data/floor_alerts.md - cards whose cheapest listed offer dropped well below THEIR OWN usual floor.
    The absolute floor is useless (median card lists its cheapest copy at 30% of the 30-day average,
@@ -11,24 +11,24 @@
    card though (median spread 0.16 across snapshots), so a drop below a card's own baseline is a real
    new listing rather than the usual beaten copy.
 
-Screen (same rules as the ledger's analysis): high-confidence English cards, set older than 9 months,
-30-day average in BAND, rising in both measured periods, trend under MAX_RATIO of the 30-day average.
+Screen (same rules as the ledger's analysis): high-confidence English cards, set older than MIN_AGE_MONTHS,
+30-day average in BAND, rising in both measured periods. No timing filter: the wanted price does that job.
 """
 import collections, json, glob, os, re, datetime
 
 CODE = os.path.dirname(os.path.abspath(__file__))
 BAND = (5.0, 100.0)
 WANT_DISCOUNT = 0.75      # buy at or under this fraction of the 30-day average. Cardmarket enforces it, so no timing filter is needed
-# Cardmarket's want-list import accepts a price code after the card name. "90%" means 90% of the price
-# Cardmarket itself shows for that card, so the wanted price travels with the import and nothing has to be
-# clicked per row. We emit the percentage that lands on WANT_DISCOUNT of the 30-day average, capped at 100%
-# so a card whose trend already sits under the target is never bid above its trend.
+# The import line carries the card name only: Cardmarket matches the whole line against a product name and
+# rejects it when a price is appended. The wanted price is set after import, per list or per row; the
+# percentage each card needs is in wants_prices.md.
 MIN_AGE_MONTHS = 9
 FLOOR_DROP = 0.6          # today's floor at most this fraction of the card's own usual floor
 FLOOR_MIN_BASE = 0.45     # and that usual floor must itself be near market, else the card always has junk copies
 FLOOR_MIN_NOW = 0.50      # and the new floor must still be a plausible near-mint price; below this it is a beaten copy
 FLOOR_MAX_NOW = 1.20      # and not above the 30-day average: when the floor sits above it, the card barely sells and the average is stale
 MODERN_YEAR = 2017        # older cards carry condition risk that the export cannot see
+MAX_PER_LIST = 150        # Cardmarket's cap: 150 entries per want list, 100 lists per game
 
 
 def wants_line(product_name):
@@ -88,7 +88,6 @@ def main():
         return f"https://www.cardmarket.com/en/Pokemon/Products/Search?{q}"
 
     picks.sort(key=lambda x: -x['a2'])
-    # One import, nothing to click per row: the percentage after each name is the wanted price.
     # Plain names only. Cardmarket's importer matches the name and rejects the whole line when a price
     # code is appended to it, so the wanted price is set after import, not here.
     with open('wants.txt', 'w', encoding='utf-8') as f:
@@ -98,20 +97,28 @@ def main():
     # worth an instant mail, a EUR 80 one is.
     GROUPS = [('cheap', 5, 20), ('mid', 20, 50), ('high', 50, 100)]
     os.makedirs('wants', exist_ok=True)
+    for stale in glob.glob('wants/*.txt'):
+        os.remove(stale)
+    made = []
     for name, lo, hi in GROUPS:
-        rows = [x for x in picks if lo <= x['a2'] < hi]
-        with open(f'wants/{name}_{lo:g}_{hi:g}_eur.txt', 'w', encoding='utf-8') as f:
-            for x in rows:
-                f.write(f"{wants_line(ps[x['p']]['name'])}\n")
+        rows = sorted((x for x in picks if lo <= x['a2'] < hi), key=lambda r: -r['a2'])
+        # A want list holds at most MAX_PER_LIST entries, so each group is split into parts and every part
+        # becomes its own list. Most valuable first, so part 1 is the one worth arming carefully.
+        for i in range(0, len(rows), MAX_PER_LIST):
+            part = rows[i:i + MAX_PER_LIST]
+            fn = f'wants/{name}_{lo:g}_{hi:g}_eur_part{i // MAX_PER_LIST + 1}.txt'
+            with open(fn, 'w', encoding='utf-8') as f:
+                for x in part:
+                    f.write(f"{wants_line(ps[x['p']]['name'])}\n")
+            made.append((fn, len(part)))
     with open('wants_prices.md', 'w', encoding='utf-8') as f:
         f.write(f"# Want list, {today}\n\n{len(picks)} English cards that rose in both measured periods, set older than "
                 f"{MIN_AGE_MONTHS} months, 30-day average €{BAND[0]:.0f} to €{BAND[1]:.0f}.\n\n"
-                f"Import `wants.txt` into one want list. The percentage after each name sets the wanted price to about "
-                f"{WANT_DISCOUNT:.0%} of that card's 30-day average, so nothing has to be set per row. Then set for the whole "
-                f"list: condition **Near Mint or better**, language **English**, and switch the e-mail alert on.\n\n"
-                f"`wants/` holds the same cards split by value, so each group can be its own list with its own alert:\n"
-                + ''.join(f"- `wants/{n}_{lo:g}_{hi:g}_eur.txt`: {sum(1 for x in picks if lo <= x['a2'] < hi)} cards, "
-                          f"30-day average €{lo:g} to €{hi:g}\n" for n, lo, hi in GROUPS) + "\n"
+                f"Cardmarket allows {MAX_PER_LIST} entries per want list, so the cards are split into files of that "
+                f"size, grouped by value. Import each file as its own want list, then set for the whole list: "
+                f"condition **Near Mint or better**, language **English**, and switch the e-mail alarm on. The wanted "
+                f"price per card is the **Alerts at** column below, about {WANT_DISCOUNT:.0%} of its 30-day average.\n\n"
+                + ''.join(f"- `{fn}`: {n} cards\n" for fn, n in made) + "\n"
                 f"| Card | Set · nr | 30d avg | Trend | Code | Alerts at | Cardmarket |\n|---|---|---|---|---|---|---|\n")
         for x in picks:
             m = x['m']

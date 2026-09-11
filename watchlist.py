@@ -32,12 +32,15 @@ MODERN_YEAR = 2017        # older cards carry condition risk that the export can
 
 
 def wants_line(product_name):
-    """Cardmarket product name -> want-list line. 'Tinkaton ex [Tandem Unit | Gigaton Hammer]'
-    -> 'Tinkaton ex Tandem Unit Gigaton Hammer'. Cardmarket matches on name plus attacks."""
-    m = re.match(r'^(.*?)\s*\[(.*?)\]\s*$', product_name)
+    """Cardmarket product name -> want-list line. Only the LAST bracket group holds the attacks and
+    abilities; earlier ones are part of the name (owner and form tags: 'Nidoran [M]', 'Staraptor [FB] LV.X',
+    'Unown [A]'), so they stay as written.
+    'Tinkaton ex [Tandem Unit | Gigaton Hammer]' -> 'Tinkaton ex Tandem Unit Gigaton Hammer'
+    'Nidoran [M] [Horn Hazard]'                  -> 'Nidoran [M] Horn Hazard'"""
+    m = re.match(r'^(.*)\[([^\[\]]*)\]\s*$', product_name)
     if not m:
         return product_name.strip()
-    return (m.group(1) + ' ' + ' '.join(a.strip() for a in m.group(2).split('|'))).strip()
+    return (m.group(1).strip() + ' ' + ' '.join(a.strip() for a in m.group(2).split('|'))).strip()
 
 
 def main():
@@ -86,9 +89,11 @@ def main():
 
     picks.sort(key=lambda x: -x['a2'])
     # One import, nothing to click per row: the percentage after each name is the wanted price.
+    # Plain names only. Cardmarket's importer matches the name and rejects the whole line when a price
+    # code is appended to it, so the wanted price is set after import, not here.
     with open('wants.txt', 'w', encoding='utf-8') as f:
         for x in picks:
-            f.write(f"{wants_line(ps[x['p']]['name'])} {x['pct']}%\n")
+            f.write(f"{wants_line(ps[x['p']]['name'])}\n")
     # split by value so each group can be its own want list with its own e-mail alert: a EUR 6 card is not
     # worth an instant mail, a EUR 80 one is.
     GROUPS = [('cheap', 5, 20), ('mid', 20, 50), ('high', 50, 100)]
@@ -97,7 +102,7 @@ def main():
         rows = [x for x in picks if lo <= x['a2'] < hi]
         with open(f'wants/{name}_{lo:g}_{hi:g}_eur.txt', 'w', encoding='utf-8') as f:
             for x in rows:
-                f.write(f"{wants_line(ps[x['p']]['name'])} {x['pct']}%\n")
+                f.write(f"{wants_line(ps[x['p']]['name'])}\n")
     with open('wants_prices.md', 'w', encoding='utf-8') as f:
         f.write(f"# Want list, {today}\n\n{len(picks)} English cards that rose in both measured periods, set older than "
                 f"{MIN_AGE_MONTHS} months, 30-day average €{BAND[0]:.0f} to €{BAND[1]:.0f}.\n\n"

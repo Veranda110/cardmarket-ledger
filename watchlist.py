@@ -5,9 +5,11 @@
    value. Cardmarket then watches the market itself and mails you when a matching copy is listed. That is
    the fast path; a once-a-day export can never be, see below.
 
-2. data/checklist.md - THE ONE TO READ EVERY MORNING. Cards whose cheapest listed copy sits between
-   FLOOR_MIN_NOW and WANT_DISCOUNT of the 30-day average (low enough to be a discount, high enough to be a
-   near-mint copy), that are not falling on every horizon, ranked by euros saved. Links carry CM_FILTER.
+2. data/checklist.md - THE ONE TO READ EVERY MORNING. Condition-independent: each card is priced at every
+   grade (COND) and the cheapest listing is tested against the worst one, so a listing under the Poor
+   figure is cheap whatever condition it turns out to be. Requires the listing to be new today and the
+   card not to be falling on every horizon. Ranked by margin after fee and postage. Links carry CM_FILTER.
+   The condition-ladder idea comes from https://github.com/nubeslunae/cardmarket-dealfinder.
 
 3. data/floor_alerts.md - cards whose cheapest listed offer dropped well below THEIR OWN usual floor.
    The absolute floor is useless (median card lists its cheapest copy at 30% of the 30-day average,
@@ -34,6 +36,14 @@ FLOOR_MAX_NOW = 1.20      # and not above the 30-day average: when the floor sit
 MODERN_YEAR = 2017        # older cards carry condition risk that the export cannot see
 MAX_PER_LIST = 150        # Cardmarket's cap: 150 entries per want list, 100 lists per game
 CHECK_TOP = 15            # rows on the daily check list: what a human can verify in about 90 seconds
+# What a copy is worth at each grade, as a fraction of the near-mint price, worst grade first. A listing
+# under the Poor figure is cheap whatever condition it turns out to be; one under Good only pays off if the
+# copy is Good or better. These are blunt fixed ratios: real spreads widen with card value, so an expensive
+# vintage card in Poor is worth far less than 40% of near mint. Hence MIN_LISTING and the BAND cap.
+COND = [('any condition', 0.40), ('Good or better', 0.75), ('Excellent or better', 0.90)]
+MIN_LISTING = 1.0         # ignore cent listings: the saving cannot cover an envelope
+FEE = 0.05                # Cardmarket's commission for a private seller, charged on the card price
+SHIPPING = 1.50           # a plain letter inside the EU, what a single card costs to receive
 # Your own Cardmarket filter, copied from the address bar after setting language and seller countries by
 # hand. It travels with every link below, so a click lands on the filtered offer list, not the raw page.
 CM_FILTER = 'sellerCountry=2,7,23&language=1'
@@ -86,26 +96,32 @@ def main():
             ratio = c['low'] / a2
             if base >= FLOOR_MIN_BASE and FLOOR_MIN_NOW <= ratio <= FLOOR_MAX_NOW and ratio / base <= FLOOR_DROP:
                 alerts.append(dict(p=p, m=m, a2=a2, tr=tr, low=c['low'], base=base * a2, drop=ratio / base))
-        # --- daily check list: which cards are worth opening today, ranked by euros saved, not by percent
+        # --- daily check list, condition-independent.
+        # The export never says what condition the cheapest copy is in, so instead of guessing, price the
+        # card in EVERY condition and ask whether the asking price beats even the worst one. If the cheapest
+        # listing sits under what a Poor copy is worth, it is cheap whatever arrives in the envelope. The
+        # idea comes from nubeslunae/cardmarket-dealfinder, which hit the same wall from the other side.
         lo_now, a1d, a7d = c.get('low'), c.get('avg1'), c.get('avg7')
-        if not (lo_now and a1d and a7d and BAND[0] <= a2 <= BAND[1]):
+        if not (lo_now and a1d and a7d and BAND[0] <= a2 <= BAND[1] and lo_now >= MIN_LISTING):
             continue
-        falling = a1d < a7d < a2          # every horizon lower than the last: today's discount is tomorrow's price
-        target = a2 * WANT_DISCOUNT
-        # The floor must be low enough to be a discount and high enough to be a near-mint copy. Without the
-        # lower bound, ranking by euros saved just finds whichever expensive card has the most beaten copy
-        # listed: a EUR 97 card with a EUR 5 floor is damage, not a EUR 92 saving.
-        if not (a2 * FLOOR_MIN_NOW <= lo_now <= target) or falling:
+        if a1d < a7d < a2:      # every horizon lower than the last: today's discount is tomorrow's price
             continue
         prev = snaps[days[-2]].get(p, {}) if len(days) > 1 else {}
+        # A real underpriced copy is gone within a day. One that stood at this price yesterday is damaged,
+        # foreign or otherwise hidden, and no amount of ranking makes it a deal.
+        if prev.get('low') and abs(prev['low'] - lo_now) < 0.01:
+            continue
+        nm = a7d                                  # sales average as the near-mint anchor, deliberately conservative
+        grade = next((g for g, r in COND if lo_now <= nm * r), None)
+        if not grade:
+            continue
         # The cheapest copy is usually damaged. When the floor RISES while the 30-day average holds, that
         # damaged copy sold and the new floor is a better copy: the opposite of an alert, and a real signal.
         cleared = bool(prev.get('low') and prev.get('avg30') and lo_now > prev['low'] * 1.05
                        and abs(a2 / prev['avg30'] - 1) < 0.05)
-        base = sorted(hist)[len(hist) // 2] if hist else None
-        checks.append(dict(p=p, m=m, a2=a2, tr=tr, low=lo_now, a7=a7d, a1=a1d, target=target,
-                           save=a2 - lo_now, ratio=lo_now / a2, cleared=cleared,
-                           own=(lo_now / a2) / base if base else None,
+        worth = nm * dict(COND)[grade]
+        checks.append(dict(p=p, m=m, a2=a2, tr=tr, low=lo_now, nm=nm, grade=grade, worth=worth,
+                           margin=worth * (1 - FEE) - lo_now - SHIPPING, cleared=cleared,
                            moves=sum(1 for x, y in zip(days, days[1:])
                                      if snaps[x].get(p, {}).get('trend') != snaps[y].get(p, {}).get('trend'))))
 
@@ -164,29 +180,32 @@ def main():
             f.write(f"| {m['name']} | {meta[m['setid']]['name']} {m['number']} | {x['a2']:.2f} | {x['tr']:.2f} | "
                     f"{x['low']:.2f} | {x['base']:.2f} | [open]({link(x['p'], m['name'])}) |\n")
     # --- the daily check list: the only output that is meant to be read every morning
-    checks.sort(key=lambda x: -x['save'])
+    checks.sort(key=lambda x: -x['margin'])
     top = checks[:CHECK_TOP]
+    sure = [x for x in checks if x['grade'] == COND[0][0]]
     with open('checklist.md', 'w', encoding='utf-8') as f:
         f.write(f"# Cards to open today, {today}\n\n"
-                f"Cards whose cheapest listed copy is at or under {WANT_DISCOUNT:.0%} of the 30-day average, that are not "
-                f"falling on every horizon (1-day under 7-day under 30-day), ranked by **euros saved**, not by percentage: "
-                f"a quarter off a €6 card is noise.\n\n"
-                f"The export carries no condition, language or seller country, so the cheapest copy is often damaged or "
-                f"foreign. Every link is pre-filtered to your languages and seller countries; the copy itself still needs "
-                f"your eyes. {len(checks)} cards qualified, the {len(top)} biggest are below.\n\n"
-                f"| Card | Set · nr | 30d avg | Cheapest | Saving | Buy under | Note | Cardmarket |\n"
+                f"The export never says what condition the cheapest copy is in. So rather than guess, each card is priced "
+                f"at every grade and the asking price is tested against the worst one. A listing under the Poor figure is "
+                f"cheap **whatever arrives in the envelope**; one under the Good figure only pays off if the copy is Good "
+                f"or better.\n\n"
+                f"Also required: the listing appeared today (a genuinely underpriced copy is gone within a day, so one "
+                f"that stood at this price yesterday is damaged or foreign), and the card is not falling on every horizon. "
+                f"Margin is what the copy is worth at its assumed grade, less Cardmarket's {FEE:.0%} and €{SHIPPING:.2f} "
+                f"postage.\n\n"
+                f"{len(checks)} cards qualified today, {len(sure)} of them cheap at any condition. The {len(top)} with the "
+                f"largest margin are below. Links carry your language and seller-country filter.\n\n"
+                f"| Card | Set · nr | Near mint | Cheapest | Cheap if | Margin | Note | Cardmarket |\n"
                 f"|---|---|---|---|---|---|---|---|\n")
         for x in top:
             m = x['m']
             note = []
             if x['cleared']:
                 note.append('floor rose, the damaged copy sold')
-            if x['own'] and x['own'] < 0.7:
-                note.append("well under this card's own usual floor")
             if x['moves'] <= 1:
                 note.append('barely trades, no rush')
-            f.write(f"| {m['name']} | {meta[m['setid']]['name']} {m['number']} | {x['a2']:.2f} | {x['low']:.2f} | "
-                    f"**€{x['save']:.2f}** | €{x['target']:.2f} | {'; '.join(note) or '—'} | "
+            f.write(f"| {m['name']} | {meta[m['setid']]['name']} {m['number']} | {x['nm']:.2f} | {x['low']:.2f} | "
+                    f"{x['grade']} | **€{x['margin']:.2f}** | {'; '.join(note) or '—'} | "
                     f"[open]({link(x['p'], m['name'])}) |\n")
     print(f"wants.txt: {len(picks)} cards ({sum(x['modern'] for x in picks)} modern) | "
           f"floor_alerts.md: {len(alerts)} | checklist.md: {len(top)} of {len(checks)} candidates")

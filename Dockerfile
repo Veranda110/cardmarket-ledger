@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Put the five scripts on the shelf at /app. Nothing runs yet.
 # data/ is deliberately NOT copied: it is mounted at run time.
-COPY refresh.py validate.py build_page.py manage.py movers.py movers_image.py test_validate.py test_movers.py ./
+COPY refresh.py validate.py build_page.py manage.py movers.py movers_image.py watchlist.py test_validate.py test_movers.py ./
 
 # The start script: catch-up refresh on every container start, then cron.
 COPY start.sh /app/start.sh

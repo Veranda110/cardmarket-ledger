@@ -42,7 +42,7 @@ Open http://localhost:8080. Every container start also refreshes, so a machine t
 | `manage.py` | add, remove, set quantity or finish, mark verified. The only way to change the card set |
 | `movers.py`, `movers_image.py` | after each refresh: biggest climbers and droppers among English cards (EUR 5-20 band, 7-day window, spike guard) -> `data/movers.md` (paste-ready post) and `data/movers.png` (shareable image, card pictures from pokemontcg.io) |
 | `build_product_map.py` | one-time (and per new set): maps every English Cardmarket product id to set code, number, name, rarity, with a confidence grade. Output `data/products_map.json` |
-| `watchlist.py` | turns the buy screen into a Cardmarket want-list import with a wanted price per line (`data/wants.txt`, split by value in `data/wants/`, summary in `wants_prices.md`) and flags cards whose cheapest copy fell below that card's own usual floor (`data/floor_alerts.md`) |
+| `watchlist.py` | turns the buy screen into a Cardmarket want-list import with a wanted price per line (`data/wants.txt`, split by value in `data/wants/`, summary in `wants_prices.md`) writes the daily check list of cards worth opening (`data/checklist.md`) and flags cards whose cheapest copy fell below that card's own usual floor (`data/floor_alerts.md`) |
 | `Dockerfile`, `start.sh` | the refresh container: Python + cron |
 | `compose.yml`, `nginx.conf` | both containers and the web server config |
 

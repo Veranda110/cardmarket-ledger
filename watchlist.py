@@ -5,7 +5,11 @@
    value. Cardmarket then watches the market itself and mails you when a matching copy is listed. That is
    the fast path; a once-a-day export can never be, see below.
 
-2. data/floor_alerts.md - cards whose cheapest listed offer dropped well below THEIR OWN usual floor.
+2. data/checklist.md - THE ONE TO READ EVERY MORNING. Cards whose cheapest listed copy sits between
+   FLOOR_MIN_NOW and WANT_DISCOUNT of the 30-day average (low enough to be a discount, high enough to be a
+   near-mint copy), that are not falling on every horizon, ranked by euros saved. Links carry CM_FILTER.
+
+3. data/floor_alerts.md - cards whose cheapest listed offer dropped well below THEIR OWN usual floor.
    The absolute floor is useless (median card lists its cheapest copy at 30% of the 30-day average,
    because that copy is damaged or foreign). The floor as a fraction of the 30-day average is stable per
    card though (median spread 0.16 across snapshots), so a drop below a card's own baseline is a real
@@ -29,6 +33,10 @@ FLOOR_MIN_NOW = 0.50      # and the new floor must still be a plausible near-min
 FLOOR_MAX_NOW = 1.20      # and not above the 30-day average: when the floor sits above it, the card barely sells and the average is stale
 MODERN_YEAR = 2017        # older cards carry condition risk that the export cannot see
 MAX_PER_LIST = 150        # Cardmarket's cap: 150 entries per want list, 100 lists per game
+CHECK_TOP = 15            # rows on the daily check list: what a human can verify in about 90 seconds
+# Your own Cardmarket filter, copied from the address bar after setting language and seller countries by
+# hand. It travels with every link below, so a click lands on the filtered offer list, not the raw page.
+CM_FILTER = 'sellerCountry=2,7,23&language=1'
 
 
 def wants_line(product_name):
@@ -55,7 +63,7 @@ def main():
     first, mid = days[0], days[len(days) // 2]
     cut = datetime.date.fromisoformat(today) - datetime.timedelta(days=MIN_AGE_MONTHS * 30)
 
-    picks, alerts = [], []
+    picks, alerts, checks = [], [], []
     for pid, m in pm.items():
         if m['conf'] != 'high':
             continue
@@ -78,6 +86,28 @@ def main():
             ratio = c['low'] / a2
             if base >= FLOOR_MIN_BASE and FLOOR_MIN_NOW <= ratio <= FLOOR_MAX_NOW and ratio / base <= FLOOR_DROP:
                 alerts.append(dict(p=p, m=m, a2=a2, tr=tr, low=c['low'], base=base * a2, drop=ratio / base))
+        # --- daily check list: which cards are worth opening today, ranked by euros saved, not by percent
+        lo_now, a1d, a7d = c.get('low'), c.get('avg1'), c.get('avg7')
+        if not (lo_now and a1d and a7d and BAND[0] <= a2 <= BAND[1]):
+            continue
+        falling = a1d < a7d < a2          # every horizon lower than the last: today's discount is tomorrow's price
+        target = a2 * WANT_DISCOUNT
+        # The floor must be low enough to be a discount and high enough to be a near-mint copy. Without the
+        # lower bound, ranking by euros saved just finds whichever expensive card has the most beaten copy
+        # listed: a EUR 97 card with a EUR 5 floor is damage, not a EUR 92 saving.
+        if not (a2 * FLOOR_MIN_NOW <= lo_now <= target) or falling:
+            continue
+        prev = snaps[days[-2]].get(p, {}) if len(days) > 1 else {}
+        # The cheapest copy is usually damaged. When the floor RISES while the 30-day average holds, that
+        # damaged copy sold and the new floor is a better copy: the opposite of an alert, and a real signal.
+        cleared = bool(prev.get('low') and prev.get('avg30') and lo_now > prev['low'] * 1.05
+                       and abs(a2 / prev['avg30'] - 1) < 0.05)
+        base = sorted(hist)[len(hist) // 2] if hist else None
+        checks.append(dict(p=p, m=m, a2=a2, tr=tr, low=lo_now, a7=a7d, a1=a1d, target=target,
+                           save=a2 - lo_now, ratio=lo_now / a2, cleared=cleared,
+                           own=(lo_now / a2) / base if base else None,
+                           moves=sum(1 for x, y in zip(days, days[1:])
+                                     if snaps[x].get(p, {}).get('trend') != snaps[y].get(p, {}).get('trend'))))
 
     picks.sort(key=lambda x: x['tr'] / x['a2'])
     alerts.sort(key=lambda x: x['drop'])
@@ -85,7 +115,7 @@ def main():
     def link(p, name):
         import urllib.parse
         q = urllib.parse.urlencode({'idExpansion': ps[p]['idExpansion'], 'searchString': name})
-        return f"https://www.cardmarket.com/en/Pokemon/Products/Search?{q}"
+        return f"https://www.cardmarket.com/en/Pokemon/Products/Search?{q}&{CM_FILTER}"
 
     picks.sort(key=lambda x: -x['a2'])
     # Plain names only. Cardmarket's importer matches the name and rejects the whole line when a price
@@ -133,7 +163,33 @@ def main():
             m = x['m']
             f.write(f"| {m['name']} | {meta[m['setid']]['name']} {m['number']} | {x['a2']:.2f} | {x['tr']:.2f} | "
                     f"{x['low']:.2f} | {x['base']:.2f} | [open]({link(x['p'], m['name'])}) |\n")
-    print(f"wants.txt: {len(picks)} cards ({sum(x['modern'] for x in picks)} modern) | floor_alerts.md: {len(alerts)} alerts")
+    # --- the daily check list: the only output that is meant to be read every morning
+    checks.sort(key=lambda x: -x['save'])
+    top = checks[:CHECK_TOP]
+    with open('checklist.md', 'w', encoding='utf-8') as f:
+        f.write(f"# Cards to open today, {today}\n\n"
+                f"Cards whose cheapest listed copy is at or under {WANT_DISCOUNT:.0%} of the 30-day average, that are not "
+                f"falling on every horizon (1-day under 7-day under 30-day), ranked by **euros saved**, not by percentage: "
+                f"a quarter off a €6 card is noise.\n\n"
+                f"The export carries no condition, language or seller country, so the cheapest copy is often damaged or "
+                f"foreign. Every link is pre-filtered to your languages and seller countries; the copy itself still needs "
+                f"your eyes. {len(checks)} cards qualified, the {len(top)} biggest are below.\n\n"
+                f"| Card | Set · nr | 30d avg | Cheapest | Saving | Buy under | Note | Cardmarket |\n"
+                f"|---|---|---|---|---|---|---|---|\n")
+        for x in top:
+            m = x['m']
+            note = []
+            if x['cleared']:
+                note.append('floor rose, the damaged copy sold')
+            if x['own'] and x['own'] < 0.7:
+                note.append("well under this card's own usual floor")
+            if x['moves'] <= 1:
+                note.append('barely trades, no rush')
+            f.write(f"| {m['name']} | {meta[m['setid']]['name']} {m['number']} | {x['a2']:.2f} | {x['low']:.2f} | "
+                    f"**€{x['save']:.2f}** | €{x['target']:.2f} | {'; '.join(note) or '—'} | "
+                    f"[open]({link(x['p'], m['name'])}) |\n")
+    print(f"wants.txt: {len(picks)} cards ({sum(x['modern'] for x in picks)} modern) | "
+          f"floor_alerts.md: {len(alerts)} | checklist.md: {len(top)} of {len(checks)} candidates")
 
 
 if __name__ == '__main__':

@@ -19,6 +19,7 @@ import json, glob, os, re, datetime
 CODE = os.path.dirname(os.path.abspath(__file__))
 BAND = (5.0, 100.0)
 MAX_RATIO = 0.85          # trend must sit this far under the 30-day average to count as a buy window
+MIN_RATIO = 0.45          # but not absurdly under it: a trend at a few cents against a EUR 7 average is a broken number, not a sale
 MIN_AGE_MONTHS = 9
 FLOOR_DROP = 0.6          # today's floor at most this fraction of the card's own usual floor
 FLOOR_MIN_BASE = 0.45     # and that usual floor must itself be near market, else the card always has junk copies
@@ -58,7 +59,7 @@ def main():
             continue
         rel = datetime.date.fromisoformat(meta[m['setid']]['release'].replace('/', '-'))
         a0, a1, a2, tr = a['avg30'], b['avg30'], c['avg30'], c['trend']
-        if rel <= cut and BAND[0] <= a2 <= BAND[1] and a1 > a0 and a2 > a1 and tr / a2 < MAX_RATIO:
+        if rel <= cut and BAND[0] <= a2 <= BAND[1] and a1 > a0 and a2 > a1 and MIN_RATIO <= tr / a2 < MAX_RATIO:
             picks.append(dict(p=p, m=m, a2=a2, tr=tr, modern=rel.year >= MODERN_YEAR,
                               g1=a1 / a0 - 1, g2=a2 / a1 - 1))
         # floor against the card's own history
